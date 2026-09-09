@@ -147,14 +147,16 @@ class Coordinator:
         context: str,
     ) -> dict:
         results = await asyncio.gather(
-            *(agent.run(subtopic, context) for agent in self.subagents)
+            *(agent.run(subtopic, context) for agent in self.subagents),
+            return_exceptions=True,
         )
 
-        findings = [
-            finding
-            for result in results
-            for finding in result["findings"]
-        ]
+        findings = []
+        for agent, result in zip(self.subagents, results):
+            if isinstance(result, Exception):
+                print(f"{type(agent).__name__} failed on {subtopic!r}: {result}")
+                continue
+            findings.extend(result["findings"])
 
         return {"topic": subtopic, "findings": findings}
 

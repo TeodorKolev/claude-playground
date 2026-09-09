@@ -77,9 +77,7 @@ class DocAnalysisAgent:
                 messages=messages,
             )
 
-            tool_uses = [block for block in response.content if block.type == "tool_use"]
-
-            if not tool_uses:
+            if response.stop_reason == "end_turn":
                 findings.extend(
                     block.text
                     for block in response.content
@@ -87,10 +85,16 @@ class DocAnalysisAgent:
                 )
                 break
 
+            if response.stop_reason != "tool_use":
+                raise RuntimeError(
+                    f"unexpected stop_reason {response.stop_reason!r} "
+                    f"researching {subtopic!r}"
+                )
+
             messages.append({"role": "assistant", "content": response.content})
 
             tool_results = []
-            for tool_use in tool_uses:
+            for tool_use in (b for b in response.content if b.type == "tool_use"):
                 result = search_documents(tool_use.input["query"])
                 tool_results.append(
                     {
