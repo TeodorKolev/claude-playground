@@ -1,0 +1,31 @@
+[project]
+name = "claude-tools"
+version = "0.1.0"
+description = "Claude loop test"
+authors = [
+    {name = "Teodor Kolev"}
+]
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic (>=1.4.0,<2.0.0)",
+    "python-dotenv (>=1.2.3,<2.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+package-mode = false
+
+[dependency-groups]
+dev = [
+    "pytest (>=9.1.1,<10.0.0)",
+    "pytest-asyncio (>=1.4.0,<2.0.0)"
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+pythonpath = ["src"]
