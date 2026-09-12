@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from hooks.normalize_tool_output import normalise_tool_output
@@ -68,3 +70,20 @@ async def test_non_dict_tool_response_is_left_alone():
     output = await normalise_tool_output(_hook_input(None), None, {"signal": None})
 
     assert output == {}
+
+
+@pytest.mark.asyncio
+async def test_normalises_real_mcp_content_block_tool_response():
+    # For a real MCP tool call, tool_response is the "content" array itself
+    # (a list of content blocks), not a dict - confirmed by driving an actual
+    # SDK MCP tool call through query() and logging what PostToolUse received.
+    content_blocks = [
+        {"type": "text", "text": json.dumps({"shipment_id": "SHP-7", "created_at": "15/03/2024", "status": "S"})}
+    ]
+
+    output = await normalise_tool_output(_hook_input(content_blocks), None, {"signal": None})
+
+    updated_blocks = output["hookSpecificOutput"]["updatedToolOutput"]
+    updated_record = json.loads(updated_blocks[0]["text"])
+    assert updated_record["created_at"] == "2024-03-15T00:00:00Z"
+    assert updated_record["status"] == "shipped"
