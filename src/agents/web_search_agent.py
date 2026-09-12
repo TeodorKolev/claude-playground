@@ -1,95 +1,22 @@
-import json
+from claude_agent_sdk import AgentDefinition
 
-from claude import client
-from tools.web_search import web_search
+from model_config import MODEL
 
-MODEL = "claude-haiku-4-5"
-MAX_TOOL_ROUNDS = 2
-# output_config.effort is only supported on Sonnet/Opus-tier models, and is
-# moot on Haiku anyway (Haiku doesn't run adaptive thinking by default).
-REQUEST_KWARGS = {} if MODEL == "claude-haiku-4-5" else {"output_config": {"effort": "low"}}
-
-
-class WebSearchAgent:
-    system_prompt = (
-        "You are a web research specialist. Given a subtopic and its "
-        "broader research goal, use the web_search tool to gather "
-        "relevant, credible information. Report structured findings, "
-        "one per line, each with a source URL and a confidence level."
-    )
-
-    tools = [
-        {
-            "name": "web_search",
-            "description": "Search the web and return results with titles, URLs, and snippets.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "The search query.",
-                    }
-                },
-                "required": ["query"],
-            },
-        }
-    ]
-
-    async def run(self, subtopic: str, context: str) -> dict:
-        messages = [
-            {
-                "role": "user",
-                "content": (
-                    f"Research subtopic: {subtopic}\n"
-                    f"Broader goal: {context}\n"
-                    "Use the web_search tool as needed, then return "
-                    "structured findings with source URLs and confidence levels."
-                ),
-            }
-        ]
-
-        findings: list[str] = []
-
-        for _ in range(MAX_TOOL_ROUNDS):
-            response = await client.messages.create(
-                model=MODEL,
-                max_tokens=2048,
-                system=self.system_prompt,
-                tools=self.tools,
-                **REQUEST_KWARGS,
-                messages=messages,
-            )
-
-            if response.stop_reason == "end_turn":
-                findings.extend(
-                    block.text
-                    for block in response.content
-                    if block.type == "text" and block.text.strip()
-                )
-                break
-
-            if response.stop_reason != "tool_use":
-                raise RuntimeError(
-                    f"unexpected stop_reason {response.stop_reason!r} "
-                    f"researching {subtopic!r}"
-                )
-
-            messages.append({"role": "assistant", "content": response.content})
-
-            tool_results = []
-            for tool_use in (b for b in response.content if b.type == "tool_use"):
-                result = web_search(tool_use.input["query"])
-                tool_results.append(
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": tool_use.id,
-                        "content": json.dumps(result),
-                    }
-                )
-
-            messages.append({"role": "user", "content": tool_results})
-
-        return {"topic": subtopic, "findings": findings}
-
-
-web_search_agent = WebSearchAgent()
+web_search_agent = AgentDefinition(
+    description=(
+        "Searches the web for current information and returns results "
+        "with source URLs and titles."
+    ),
+    prompt=(
+        "Search for information on the given topic. Return each finding as "
+        "JSON matching this Finding schema: claim (the content), "
+        "source_url, document_name (null — you have no document), "
+        "page_number (null — you have no document), confidence "
+        "('high'|'medium'|'low'), retrieved_by ('web-search'). Keep the "
+        "claim itself free of citation details — those belong in the "
+        "metadata fields, not embedded in the claim text."
+    ),
+    tools=["WebSearch"],
+    model=MODEL,
+    maxTurns=6,
+)
